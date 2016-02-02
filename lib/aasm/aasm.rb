@@ -91,6 +91,19 @@ private
           *process_args(event, aasm(state_machine_name).current_state, *args))
 
         if new_state_name = event.fire(self, {:may_fire => may_fire_to}, *args)
+          if AASM::StateMachine[self.class][state_machine_name].config.log_state_changes
+            local_aasm = aasm(state_machine_name)
+            params = {
+              model: self,
+              transition_event: event.name,
+              from_state: old_state.name,
+              to_state: new_state_name
+            }
+            if local_aasm.custom_column_values.present?
+              params.merge!(local_aasm.custom_column_values){|key, old, new| old}
+            end
+            AASM::StateChangeLog.create!(params)
+          end
           aasm_fired(state_machine_name, event, old_state, new_state_name, options, *args, &block)
         else
           aasm_failed(state_machine_name, event_name, old_state)
@@ -138,19 +151,6 @@ private
       )
 
       self.aasm_event_fired(event.name, old_state.name, aasm(state_machine_name).current_state) if self.respond_to?(:aasm_event_fired)
-      if AASM::StateMachine[self.class][state_machine_name].config.log_state_changes
-        local_aasm = aasm(state_machine_name)
-        params = {
-          model: self,
-          transition_event: event.name,
-          from_state: old_state.name,
-          to_state: local_aasm.current_state
-        }
-        if local_aasm.custom_column_values.present?
-          params.merge!(local_aasm.custom_column_values){|key, old, new| old}
-        end
-        AASM::StateChangeLog.create!(params)
-      end
     else
       self.aasm_event_failed(event.name, old_state.name) if self.respond_to?(:aasm_event_failed)
     end
